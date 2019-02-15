@@ -3,18 +3,17 @@
 #include <algorithm>  
 #include <Eigen/Dense>
 #include"corpus.h"
-#include<tuple>
 #include"BPNN.h"
 using namespace Eigen;
 namespace test
 {
 	void test_column()
 	{
-		VectorXd v(VectorXd::Constant(3,1));
-		std::cout << v << std::endl;
-		std::cout << v.transpose() << std::endl;
-		std::cout << v << std::endl;
+		std::vector<int> q{ 1,2 };
+		std::vector<int> &w = q;
+		Eigen::VectorXi y = Eigen::Map<Eigen::VectorXi, Eigen::Unaligned>(w.data(), w.size());
 
+		std::cout << y << std::endl;
 	}
 	void test_matrix()
 	{
@@ -24,19 +23,36 @@ namespace test
 		std::cout << w.array()*z.array() << std::endl;
 
 	}
-	void test_()
+	void test_move()
 	{
 		std::vector<std::pair<std::vector<int>, std::vector<int>>>z;
-		const std::vector<std::pair<std::vector<int>, std::vector<int>>> w=z;
+		steady_clock::time_point t1 = steady_clock::now();
+
+		for (int i = 0; i < 10000000; i++)
+		{
+			std::pair < std::vector<int>, std::vector<int>> q{ {1},{2} };
+			z.emplace_back(q);
+			std::vector<int> w (q.first);
+			std::vector<int> w0(q.second);
+		}
+		steady_clock::time_point t2 = steady_clock::now();
+		duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
+		std::cout << "It took me " << time_span.count() << " seconds.";
+
+
 	}
 
 
+
+
 }
-using pre_data = std::vector<std::pair<std::vector<int>, std::vector<int>>>;
+using pre_data = std::vector<std::pair<std::vector<int>, std::vector<double>>>;
 int main()
 {
 	//test::test_matrix();
 	//配置文件
+//	test::test_move();
+//	test::test_column();
 	
 	
 	std::string embed_file = "../data/embed.txt";
@@ -56,6 +72,7 @@ int main()
 	BPNN bp(sizes,data.extend_embed);
 
 	bp.SGD(train,dev,epochs,bach_size,eta);
+	
 	system("pause");
 	return 0;
 }

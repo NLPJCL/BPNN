@@ -50,7 +50,7 @@ public:
 		{
 			extend_embed.emplace_back(std::move(good_randVec()));
 		}
-		add_word(SOS);
+		add_word(SOS); //增加词以及对应嵌入矩阵。
 		add_word(EOS);
 		add_word(UNK);
 		std::cout << words.size() << std::endl;
@@ -141,10 +141,10 @@ public:
 
 
 	//加载各个数据集，
-	std::vector<std::pair<std::vector<int>, std::vector<int>>> load(const std::string &file_name,int windows)
+	std::vector<std::pair<std::vector<int>, std::vector<double>>> load(const std::string &file_name,int windows)
 	{
 		std::vector<sentence> sentences = read_data(file_name);
-		std::vector<std::pair<std::vector<int>,std::vector<int>>> data;
+		std::vector<std::pair<std::vector<int>,std::vector<double>>> data;
 		
 		for (int i = 0; i < sentences.size(); ++i)
 		{
@@ -156,7 +156,8 @@ public:
 			word.emplace_back(EOS);
 			for (int j = 0; j <word.size()-4; j++)
 			{
-				std::vector<int> wseq, tseq(tags.size(), 0);
+				std::vector<int> wseq;
+				std::vector<double> tseq(tags.size(), 0);
 				for (int k = j; k < j + 5; k++)
 				{
 					if (words.find(word[k]) != words.end())
@@ -168,7 +169,7 @@ public:
 						wseq.emplace_back(words.at(UNK));
 					}
 				}
-				tseq[tags.at(sentences[i].tag[j])] = 1;
+				tseq[tags.at(sentences[i].tag[j])] = 1.0;
 				data.emplace_back( std::move(wseq),std::move(tseq));
 			}
 		}
