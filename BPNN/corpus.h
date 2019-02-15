@@ -5,6 +5,7 @@
 #include <codecvt>
 #include<iostream>
 #include<random>
+#include <Eigen/Dense>
 struct sentence
 {
 	std::vector<std::wstring> word;
@@ -20,6 +21,7 @@ public:
 	std::unordered_map<std::wstring, int> words;
 	std::unordered_map<std::wstring, int> tags;
 	std::vector<std::vector<double_t>> extend_embed;
+	Eigen::MatrixXd extend_embed_matrix;
 	//构造嵌入矩阵。
 	void fit(const std::string &embed_name, const std::string &train_name)
 	{
@@ -53,6 +55,14 @@ public:
 		add_word(SOS); //增加词以及对应嵌入矩阵。
 		add_word(EOS);
 		add_word(UNK);
+		extend_embed_matrix.resize(extend_embed.size(), 100);
+		for (int i = 0; i < extend_embed.size(); i++)
+		{
+			for (int j = 0; j < extend_embed[i].size(); j++)
+			{
+				extend_embed_matrix(i, j) = extend_embed[i][j];
+			}
+		}
 		std::cout << words.size() << std::endl;
 		std::cout << tags.size() << std::endl;
 	}
@@ -84,7 +94,7 @@ public:
 		assert(embed_file);
 		std::string line;
 		std::wstring wline, word;
-			int t0, t1;
+		int t0, t1;
 		std::vector<double_t> values;
 		values.reserve(100);
 		while (getline(embed_file, line))
@@ -110,7 +120,6 @@ public:
 		std::wstring_convert<std::codecvt_utf8<wchar_t>> codec;
 		std::ifstream file(file_name);
 		assert(file);
-
 		std::vector<sentence> sentences;
 		std::string line;
 		sentence sen;
@@ -138,14 +147,11 @@ public:
 		}
 		return sentences;
 	}
-
-
 	//加载各个数据集，
-	std::vector<std::pair<std::vector<int>, std::vector<double>>> load(const std::string &file_name,int windows)
+	std::vector<std::pair<Eigen::VectorXd, Eigen::VectorXd>> load(const std::string &file_name,int windows)
 	{
 		std::vector<sentence> sentences = read_data(file_name);
-		std::vector<std::pair<std::vector<int>,std::vector<double>>> data;
-		
+		std::vector<std::pair<Eigen::VectorXd, Eigen::VectorXd>> data;
 		for (int i = 0; i < sentences.size(); ++i)
 		{
 			std::vector<std::wstring> word;
@@ -156,20 +162,22 @@ public:
 			word.emplace_back(EOS);
 			for (int j = 0; j <word.size()-4; j++)
 			{
-				std::vector<int> wseq;
-				std::vector<double> tseq(tags.size(), 0);
+				Eigen::VectorXd wseq(5);
+				int count = 0;
+				Eigen::VectorXd tseq = Eigen::VectorXd::Zero(tags.size());
 				for (int k = j; k < j + 5; k++)
 				{
 					if (words.find(word[k]) != words.end())
 					{
-						wseq.emplace_back(words.at(word[k]));
+						wseq(count)=words.at(word[k]);
 					}
 					else
 					{
-						wseq.emplace_back(words.at(UNK));
+						wseq(count)=words.at(UNK);
 					}
+					count++;
 				}
-				tseq[tags.at(sentences[i].tag[j])] = 1.0;
+				tseq(tags.at(sentences[i].tag[j])) = 1.0;
 				data.emplace_back( std::move(wseq),std::move(tseq));
 			}
 		}

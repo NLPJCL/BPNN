@@ -7,9 +7,10 @@
 #include<chrono>
 #include<unordered_map>
 //using namespace Eigen;
-using pre_data = std::vector<std::pair<std::vector<int>, std::vector<double>>>;
-using pair_x_y = std::pair<std::vector<int>, std::vector<double>>;
-using pair_w_b =std::pair<std::vector<Eigen::MatrixXd>, std::vector<Eigen::VectorXd>>;
+#include<tuple>
+using pre_data = std::vector<std::pair<Eigen::VectorXd, Eigen::VectorXd>>;
+using pair_x_y = std::pair<Eigen::VectorXd, Eigen::VectorXd>;
+using tuple_w_b_x =std::tuple<std::vector<Eigen::MatrixXd>, std::vector<Eigen::VectorXd>, Eigen::VectorXd>;
 using namespace std::chrono;
 
 class BPNN
@@ -20,11 +21,11 @@ private:
 	int input_size;
 	std::vector<Eigen::MatrixXd> weight;
 	std::vector<Eigen::VectorXd> biases;
-	std::vector<std::vector<double_t>> extend_embed;
+	Eigen::MatrixXd extend_embed;
 	int nl;
 public:
 	//初始化w和b
-	BPNN(std::vector<int>sizes_, std::vector<std::vector<double_t>> extend_embed_):sizes(sizes_),extend_embed(extend_embed_),input_size(sizes_[0])
+	BPNN(const std::vector<int> &sizes_, Eigen::MatrixXd &extend_embed_):sizes(sizes_),extend_embed(extend_embed_),input_size(sizes_[0])
 	{
 		nl = sizes.size();
 		//初始化b
@@ -52,7 +53,7 @@ public:
 			std::random_shuffle(train.begin(), train.end());
 			for (int j= 0; j < train.size();j=j + bach_size)
 			{
-				if (j + bach_size <= train.size() - 50)
+				if (j <= train.size() - 50)
 				{
 					pre_data bach(train.begin() + j, train.begin() + j + bach_size);
 					update(bach, eta);
@@ -62,11 +63,6 @@ public:
 					pre_data bach(train.begin() + j, train.end());
 					update(bach, eta);
 				}
-				if (j == 10000)
-				{
-					break;
-				}
-			//	std::cout << j<<std::endl;
 			}
 			steady_clock::time_point t2 = steady_clock::now();
 			duration<double> time_span = duration_cast<duration<double>>(t2 - t1);
@@ -86,12 +82,12 @@ public:
 	double evaluate( pre_data &x_y)
 	{
 		std::pair<std::vector<Eigen::VectorXd>, std::vector<Eigen::VectorXd>> z;
-		int max, correct;
+		int max, correct=0;
 		for (int i = 0; i < x_y.size(); ++i)
 		{
 			z = forward(x_y[i].first);
 			z.second[-1].maxCoeff(&max);
-			if (x_y[i].second[max] == 1.0)
+			if (x_y[i].second(max) == 1.0)
 			{
 				correct++;
 			}
@@ -105,17 +101,36 @@ public:
 	{
 		std::vector<Eigen::MatrixXd> nabla_w(init_w()),delta_nabla_w;
 		std::vector<Eigen::VectorXd> nabla_b(init_b()),delta_nabla_b;
-		std::unordered_map<int, std::vector<double>> nabla_x;
-		pair_w_b delta_nabla_w_b;
+		std::unordered_map<int, Eigen::RowVectorXd> nabla_x;
+		Eigen::VectorXd delta_nabla_x;
+		tuple_w_b_x delta_nabla_w_b_x;
+		//Eigen::RowVectorXd
 		for (int i = 0; i < bach.size(); ++i)
 		{
-			delta_nabla_w_b = backprop(bach[i]);
-			delta_nabla_w = std::move(delta_nabla_w_b.first);
-			delta_nabla_b = std::move(delta_nabla_w_b.second);
-			for (int i = 0; i < delta_nabla_w.size(); i++)
+			delta_nabla_w_b_x = backprop(bach[i]);
+
+			delta_nabla_w = std::move(std::get<0>(delta_nabla_w_b_x));
+			delta_nabla_b = std::move(std::get<1>(delta_nabla_w_b_x));
+			delta_nabla_x = std::move(std::get<2>(delta_nabla_w_b_x));
+			for (int q = 0; q < delta_nabla_w.size(); q++)
 			{
-				nabla_w[i] += delta_nabla_w[i];
-				nabla_b[i] += delta_nabla_b[i];
+				nabla_w[q] += delta_nabla_w[q];
+				nabla_b[q] += delta_nabla_b[q];
+			}
+			int k = 0;
+			for (int j = 0; j< bach[i].first.size(); j++)
+			{
+
+				if (nabla_x.find(bach[i].first(j)) == nabla_x.end())
+				{
+					nabla_x[bach[i].first(j)]= delta_nabla_x.segment(k, 100);
+				}
+				else
+				{
+					nabla_x[bach[i].first(j)] -= delta_nabla_x.segment(k, 100).transpose();
+				}
+				k = k + 100;
+
 			}
 		}
 		//更新梯度
@@ -124,20 +139,17 @@ public:
 			biases[i] -= nabla_b[i]*(eta / bach.size());
 			weight[i] -= nabla_w[i] * (eta / bach.size());
 		}
-		for (int i = 0; i < nabla_x.size(); i++)
+		for (auto w=nabla_x.begin(); w != nabla_x.end(); w++)
 		{
-			for (int j = 0; j < extend_embed[i].size(); j++)
-			{
-				extend_embed[i][j] -= nabla_x[i][j];
-			}
+				extend_embed.row(w->first) -= w->second;
 		}
 	}
-	pair_w_b backprop( pair_x_y  &x_y)
+	tuple_w_b_x backprop( pair_x_y  &x_y)
 	{
 		std::vector<Eigen::MatrixXd> nabla_w (init_w());
 		std::vector<Eigen::VectorXd> nabla_b(init_b());
-		Eigen::VectorXd y = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(x_y.second.data(), x_y.second.size());
-	
+		Eigen::VectorXd y = x_y.second;
+
 		//前向
 		std::pair<std::vector<Eigen::VectorXd>, std::vector<Eigen::VectorXd>> z_a(forward(x_y.first));
 
@@ -145,7 +157,7 @@ public:
 		//后向用cross_entropy
 		std::vector<Eigen::VectorXd> zs( std::move(z_a.first)), activations (std::move( z_a.second));
 		Eigen::VectorXd delta, z;
-		delta = std::move(activations[activations.size()-1] - y);
+		delta = activations[activations.size()-1] - y;
 		nabla_b[nabla_b.size()-1] = delta;
 		nabla_w[nabla_w.size()-1] = delta*activations[activations.size()-2].transpose();
 
@@ -156,23 +168,26 @@ public:
 			nabla_b[i] = delta;
 			nabla_w[i] = delta * activations[i].transpose();
 		}
-
-
-		return pair_w_b{ nabla_w,nabla_b };
+		Eigen::VectorXd nabla_x = weight[0].transpose()*delta;
+		return tuple_w_b_x{ nabla_w,nabla_b,nabla_x};
 		
 	}
-	std::pair<std::vector<Eigen::VectorXd>, std::vector<Eigen::VectorXd>> forward( std::vector<int> &x)
+	std::pair<std::vector<Eigen::VectorXd>, std::vector<Eigen::VectorXd>> forward(Eigen::VectorXd &x)
 	{
 		std::vector<Eigen::VectorXd> zs, activations;
 		//将输入经过词嵌入矩阵转化为词向量。
-		Eigen::VectorXd a,z;
+		Eigen::VectorXd a(500),z;
 		int j = 0;
 		std::vector<double> line;
 		for (int i = 0; i < x.size(); i++)
 		{
-			line.insert(line.end(),extend_embed[x[i]].begin(), extend_embed[x[i]].end());
+			for (int k = 0; k < extend_embed.row(x[i]).size(); k++)
+			{
+				a(j) = extend_embed(x(i), k);
+				j++;
+			}
 		}
-		a = Eigen::Map<Eigen::VectorXd, Eigen::Unaligned>(line.data(), line.size());
+
 		//前向计算、
 
 		activations.emplace_back(a);

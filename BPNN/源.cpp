@@ -12,9 +12,9 @@ namespace test
 		std::vector<int> q{ 1,2 };
 		std::vector<int> &w = q;
 		Eigen::VectorXi y = Eigen::Map<Eigen::VectorXi, Eigen::Unaligned>(w.data(), w.size());
-
 		std::cout << y << std::endl;
 	}
+
 	void test_matrix()
 	{
 		Eigen::MatrixXd w(2, 2),z(2,2);
@@ -46,7 +46,7 @@ namespace test
 
 
 }
-using pre_data = std::vector<std::pair<std::vector<int>, std::vector<double>>>;
+using pre_data = std::vector<std::pair<Eigen::VectorXd, Eigen::VectorXd>>;
 int main()
 {
 	//test::test_matrix();
@@ -69,7 +69,7 @@ int main()
 	pre_data train=data.load(train_file,window);
 	pre_data dev= data.load(train_file, window);
 	std::vector<int> sizes{ input_size*window, hidden_size, int(data.tags.size()) };
-	BPNN bp(sizes,data.extend_embed);
+	BPNN bp(sizes,data.extend_embed_matrix);
 
 	bp.SGD(train,dev,epochs,bach_size,eta);
 	
