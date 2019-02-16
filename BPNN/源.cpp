@@ -7,12 +7,22 @@
 using namespace Eigen;
 namespace test
 {
+
+	Eigen::VectorXd  exp_(Eigen::VectorXd &z)
+	{
+		return z.array().exp();
+	}
 	void test_column()
 	{
-		std::vector<int> q{ 1,2 };
-		std::vector<int> &w = q;
-		Eigen::VectorXi y = Eigen::Map<Eigen::VectorXi, Eigen::Unaligned>(w.data(), w.size());
-		std::cout << y << std::endl;
+		//std::vector<int> q{ 
+		VectorXd q(4);
+		q << 1, 1,1,1;
+		//q=q.array().exp();
+		q =exp_(q).array() *(1-q.array().exp());
+		//std::vector<int> &w = q;
+		//Eigen::VectorXi y = Eigen::Map<Eigen::VectorXi, Eigen::Unaligned>(w.data(), w.size());
+		
+		std::cout << q << std::endl;
 	}
 
 	void test_matrix()
@@ -41,6 +51,20 @@ namespace test
 
 
 	}
+	void test_vector()
+	{
+		std::vector<int> train{3,2,1};
+		unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+		std::shuffle(train.begin(), train.end(), std::default_random_engine(seed));
+
+
+		for (int i = 0; i < train.size(); i++)
+		{
+			std::cout << train[i] << " ";
+
+		}
+		std::cout << std::endl;
+	}
 
 
 
@@ -52,11 +76,12 @@ int main()
 	//test::test_matrix();
 	//配置文件
 //	test::test_move();
-//	test::test_column();
-	
+	//test::test_column();
+	//test::test_vector();
 	
 	std::string embed_file = "../data/embed.txt";
 	std::string train_file = "../data/ctb5/train.conll";
+	std::string dev_file = "../data/ctb5/dev.conll";
 	int input_size = 100;//预训练向量维度
 	int window = 5;
 	int hidden_size = 300;
@@ -67,12 +92,11 @@ int main()
 	corpus data;
 	data.fit(embed_file,train_file);
 	pre_data train=data.load(train_file,window);
-	pre_data dev= data.load(train_file, window);
+	pre_data dev= data.load(dev_file, window);
 	std::vector<int> sizes{ input_size*window, hidden_size, int(data.tags.size()) };
 	BPNN bp(sizes,data.extend_embed_matrix);
 
 	bp.SGD(train,dev,epochs,bach_size,eta);
-	
 	system("pause");
 	return 0;
 }
